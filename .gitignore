@@ -1,0 +1,20 @@
+# Evitar subir variables sensibles
+.env
+
+# Evitar archivos JSON generados cada ejecución
+*.json
+
+# Evitar carpetas y archivos de Playwright o Python
+__pycache__/
+*.pyc
+
+# Evitar carpetas de entorno virtual si usás
+venv/
+env/
+
+# Carpetas comunes de editor
+.vscode/
+.idea/
+
+# Ignorar archivos de logs temporales si los generás
+*.log
