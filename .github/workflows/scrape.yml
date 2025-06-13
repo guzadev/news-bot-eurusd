@@ -2,7 +2,7 @@ name: Scrape ForexFactory Daily
 
 on:
   schedule:
-    - cron: "0 0 * * 1-5"  # 🕛 A las 00:00 UTC de lunes (1) a viernes (5)
+    - cron: "0 8 * * 1-5"  # 🕛 A las 00:00 UTC de lunes (1) a viernes (5)
   workflow_dispatch:  # También lo podés disparar manualmente
 
 jobs:
