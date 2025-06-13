@@ -193,7 +193,7 @@ def main():
         message += "\n🔗 [Ver más detalles en ForexFactory](https://www.forexfactory.com/calendar)\n"
         message += "\n⚡ *Operá con precaución!*"
     else:
-        message = "✅ *Hoy no hubieron noticias FOMC/NFP/CPI relevantes para EUR/USD.*"
+        message = "✅ *Hoy no hay noticias FOMC/NFP/CPI relevantes para EUR/USD.*"
 
     send_telegram_message(message)
     print(message, flush=True)
