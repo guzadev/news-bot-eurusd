@@ -92,7 +92,6 @@ def scrape_forex_factory():
 
         page.goto("https://www.forexfactory.com/calendar", timeout=60000)
 
-        # Simular movimiento de mouse y scroll con tiempos random
         page.mouse.move(100, 100)
         time.sleep(random.uniform(0.5, 1.5))
         for x in range(100, 600, 100):
@@ -107,12 +106,11 @@ def scrape_forex_factory():
         soup = BeautifulSoup(html, "html.parser")
         all_rows = soup.find_all("tr")
 
-        et = pytz.timezone("America/New_York")
-        bsas = pytz.timezone("America/Argentina/Buenos_Aires")
-        today_bsas = datetime.now(bsas).date()
-
+        today_utc = datetime.now(timezone.utc).date()
         current_date = ""
         events = []
+        last_valid_time = ""
+
 
         for row in all_rows:
             classes = row.get("class", [])
@@ -120,15 +118,20 @@ def scrape_forex_factory():
                 continue
 
             date_td = row.find("td", class_="calendar__date")
-            if date_td:
+            if date_td and date_td.get_text(strip=True):
                 current_date = date_td.get_text(separator=" ", strip=True)
 
             try:
-                time_ = row.find("td", class_="calendar__time").text.strip() if row.find("td", class_="calendar__time") else ""
+                time_td = row.find("td", class_="calendar__time")
+                if time_td and time_td.text.strip() not in ["", "All Day", "Tentative"]:
+                    time_ = time_td.text.strip()
+                    last_valid_time = time_
+                else:
+                    time_ = last_valid_time  # Usa la última hora válida
+
                 currency = row.find("td", class_="calendar__currency").text.strip() if row.find("td", class_="calendar__currency") else ""
                 event = row.find("td", class_="calendar__event").text.strip() if row.find("td", class_="calendar__event") else ""
 
-                # Impacto
                 impact_element = row.find("td", class_="calendar__impact")
                 impact_span = impact_element.find("span") if impact_element else None
                 impact_title = impact_span.get("title", "").lower() if impact_span else ""
@@ -142,20 +145,25 @@ def scrape_forex_factory():
                 else:
                     impact = ""
 
-                if impact != "High" or not re.search(r"(FOMC|NFP|CPI)", event, re.IGNORECASE):
+                if impact != "High":
+                    # print(f"[DEBUG] Descartado por impacto: {event}", flush=True)
                     continue
 
-                if time_ in ["All Day", "Tentative", ""]:
+                if time_ in ["All Day", "Tentative", ""] and last_valid_time == "":
+                    # print(f"[DEBUG] Descartado por hora inválida: {event}", flush=True)
                     continue
 
-                event_dt_str = f"{current_date} {time_}"
-                event_dt_naive = datetime.strptime(event_dt_str, "%a %b %d %I:%M%p")
-                event_dt_et = et.localize(event_dt_naive.replace(year=datetime.now(timezone.utc).year))
-                event_dt_bsas = event_dt_et.astimezone(bsas)
+                year = datetime.now(timezone.utc).year
+                event_dt_str = f"{current_date} {year} {time_}"
+                event_dt_naive = datetime.strptime(event_dt_str, "%a %b %d %Y %I:%M%p")
 
-                if event_dt_bsas.date() != today_bsas:
+                event_dt_utc = event_dt_naive.replace(year=datetime.now(timezone.utc).year).replace(tzinfo=timezone.utc)
+
+                if event_dt_utc.date() != today_utc:
+                    # print(f"[DEBUG] Descartado por fecha: {event} @ {event_dt_utc.date()} != {today_utc}", flush=True)
                     continue
 
+                event_dt_bsas = event_dt_utc.astimezone(timezone(timedelta(hours=-3)))
                 hora_bsas = event_dt_bsas.strftime("%H:%M")
 
                 events.append({
@@ -187,16 +195,15 @@ def main():
     print(f"[INFO] {len(relevant_events)} eventos relevantes encontrados.", flush=True)
 
     if relevant_events:
-        message = f"📰 *Noticias FOMC/NFP/CPI relevantes para EUR/USD de hoy:*\n\n"
+        message = f"📰 *Noticias de alto impacto para EUR/USD de hoy:*\n\n"
         for event in relevant_events:
             message += f"📅 *{event['date']}* 🕒 *{event['hora_bsas']} hs (hora Buenos Aires)* — `{event['currency']}` — {event['event']}\n"
         message += "\n🔗 [Ver más detalles en ForexFactory](https://www.forexfactory.com/calendar)\n"
         message += "\n⚡ *Operá con precaución!*"
     else:
-        message = "✅ *Hoy no hay noticias FOMC/NFP/CPI relevantes para EUR/USD.*"
+        message = "✅ *Hoy no hay noticias de alto impacto para EUR/USD.*"
 
     send_telegram_message(message)
-    print(message, flush=True)
 
     end_time = time.time()  # 🚀 Medir tiempo al terminar
     elapsed_time = end_time - start_time
