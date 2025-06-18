@@ -87,7 +87,8 @@ def scrape_forex_factory():
 
         page = browser.new_page(
             user_agent=user_agent,
-            viewport={"width": 1280, "height": 800}
+            viewport={"width": 1280, "height": 800},
+            timezone_id="UTC"
         )
 
         page.goto("https://www.forexfactory.com/calendar", timeout=60000)
@@ -163,7 +164,7 @@ def scrape_forex_factory():
                     # print(f"[DEBUG] Descartado por fecha: {event} @ {event_dt_utc.date()} != {today_utc}", flush=True)
                     continue
 
-                event_dt_bsas = event_dt_utc.astimezone(timezone(timedelta(hours=-3)))
+                event_dt_bsas = event_dt_utc.astimezone(timezone(timedelta(hours=+2)))
                 hora_bsas = event_dt_bsas.strftime("%H:%M")
 
                 events.append({
