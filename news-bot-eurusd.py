@@ -164,7 +164,7 @@ def scrape_forex_factory():
                     # print(f"[DEBUG] Descartado por fecha: {event} @ {event_dt_utc.date()} != {today_utc}", flush=True)
                     continue
 
-                event_dt_bsas = event_dt_utc.astimezone(timezone(timedelta(hours=+2)))
+                event_dt_bsas = event_dt_utc.astimezone(timezone(timedelta(hours=+2))) # +2 es para compensar la hora que usa github al correr chromium
                 hora_bsas = event_dt_bsas.strftime("%H:%M")
 
                 events.append({
