@@ -9,7 +9,32 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
-import pytz
+
+
+DIAS_SEMANA_ES = {
+    "Monday": "Lunes",
+    "Tuesday": "Martes",
+    "Wednesday": "Miércoles",
+    "Thursday": "Jueves",
+    "Friday": "Viernes",
+    "Saturday": "Sábado",
+    "Sunday": "Domingo"
+}
+
+MESES_ES = {
+    "January": "Enero",
+    "February": "Febrero",
+    "March": "Marzo",
+    "April": "Abril",
+    "May": "Mayo",
+    "June": "Junio",
+    "July": "Julio",
+    "August": "Agosto",
+    "September": "Septiembre",
+    "October": "Octubre",
+    "November": "Noviembre",
+    "December": "Diciembre"
+}
 
 
 
@@ -196,13 +221,23 @@ def main():
     print(f"[INFO] {len(relevant_events)} eventos relevantes encontrados.", flush=True)
 
     if relevant_events:
-        message = f"📰 *Noticias de alto impacto para EUR/USD de hoy:*\n\n"
+        # Tomamos la fecha del primer evento para encabezado
+        primera_fecha = relevant_events[0]["date"]
+        fecha_dt = datetime.strptime(f"{primera_fecha} {datetime.now().year}", "%a %b %d %Y")
+
+        dia_es = DIAS_SEMANA_ES[fecha_dt.strftime("%A")]
+        mes_es = MESES_ES[fecha_dt.strftime("%B")]
+        fecha_formateada = f"{dia_es} {fecha_dt.day} de {mes_es}"
+
+        message = f"📰 *Noticias de alto impacto para EUR/USD de hoy 👇🏻\n\n📅 {fecha_formateada}:*\n\n"
+
         for event in relevant_events:
-            message += f"📅 *{event['date']}* 🕒 *{event['hora_bsas']} hs (hora Buenos Aires)* — `{event['currency']}` — {event['event']}\n"
+            message += f"• ⏰ *{event['hora_bsas']}* — `{event['currency']}` — *{event['event']}*\n"
+        message += "\n💶 / 💵\n"
         message += "\n🔗 [Ver más detalles en ForexFactory](https://www.forexfactory.com/calendar)\n"
         message += "\n⚡ *Operá con precaución!*"
     else:
-        message = "✅ *Hoy no hay noticias de alto impacto para EUR/USD.*"
+        message = "✅ *Hoy no hay noticias de alto impacto para EUR/USD* 👍🏻"
 
     send_telegram_message(message)
 
