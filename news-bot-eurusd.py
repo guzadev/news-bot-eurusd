@@ -237,7 +237,7 @@ def main():
         message += "\n🔗 [Ver más detalles en ForexFactory](https://www.forexfactory.com/calendar)\n"
         message += "\n⚡ *Operá con precaución!*"
     else:
-        message = "✅ *Hoy no hay noticias de alto impacto para EUR/USD* 👍🏻"
+        message = "✅ *Hoy no hay noticias de alto impacto para EUR/USD* 👍🏻\n\nOperá con tranquilidad 👌🏻"
 
     send_telegram_message(message)
 
