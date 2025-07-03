@@ -1,0 +1,15 @@
+services:
+  - type: cron
+    name: eurusd-news-scraper
+    env: python
+    plan: free
+    schedule: "0 8 * * 1-5"  # 🕛 A las 00:00 UTC de lunes a viernes
+    buildCommand: |
+      pip install -r requirements.txt
+      playwright install chromium
+    startCommand: python news-bot-eurusd.py
+    envVars:
+      - key: TELEGRAM_TOKEN
+        sync: false  # Lo agregás manualmente en el dashboard de Render
+      - key: TELEGRAM_CHAT_IDS
+        sync: false  # Lo agregás manualmente en el dashboard de Render
