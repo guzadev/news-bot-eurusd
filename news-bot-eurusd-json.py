@@ -95,14 +95,28 @@ def get_title(evt) -> str:
     return (evt.get("title") or evt.get("event") or evt.get("name") or "").strip()
 
 def get_ts_utc(evt):
-    """Obtiene el timestamp UTC (en segundos). Acepta ts en ms y date+time como fallback."""
+    """
+    Devuelve epoch (segundos) en UTC.
+    Soporta:
+      - timestamp en s o ms (key 'timestamp')
+      - ISO-8601 en key 'date' (p. ej. '2025-10-27T05:00:00-04:00')
+      - fallback: date+time separados (raro en este feed)
+    """
     ts = evt.get("timestamp")
     if isinstance(ts, (int, float)):
-        if ts > 1e12:  # si viniera en milisegundos
+        if ts > 1e12:  # ms -> s
             ts = ts / 1000.0
         return int(ts)
 
-    # Fallback (poco común en este feed): date+time → asumimos UTC
+    d = evt.get("date")
+    if isinstance(d, str) and d:
+        try:
+            dt = datetime.fromisoformat(d)           # respeta el offset del string (ej. -04:00)
+            dt_utc = dt.astimezone(timezone.utc)
+            return int(dt_utc.timestamp())
+        except Exception:
+            pass
+
     ds, ts_ = evt.get("date"), evt.get("time")
     if ds and ts_:
         for fmt in ("%Y-%m-%d %H:%M", "%d-%m-%Y %H:%M", "%Y/%m/%d %H:%M"):
@@ -110,8 +124,9 @@ def get_ts_utc(evt):
                 dt_naive = datetime.strptime(f"{ds} {ts_}", fmt)
                 return int(dt_naive.replace(tzinfo=timezone.utc).timestamp())
             except Exception:
-                pass
+                continue
     return None
+
 
 # ---------- Carga de eventos de HOY (reutilizable) ----------
 def load_events_today_ba_eur_usd_high():
@@ -233,17 +248,14 @@ def dentro_de_franja_ba() -> bool:
     fed = 1430 <= hhmm <= 1530
     return eur or usd or fed
 
-# ---------- Entry point ----------
-if __name__ == "__main__":
-    # Si usás un cron amplio, activá el guard:
-    # if not dentro_de_franja_ba():
-    #     sys.exit(0)
 
-    # 1) Digest "no hay noticias" (una vez al día a la hora exacta BA)
-    digest_hhmm = os.getenv("DIGEST_AT_BA", "03:00")  # podés setear "07:00" si preferís más tarde
-    send_no_news_digest_if_applicable(digest_at_hhmm_ba=digest_hhmm)
+# === EJECUCION ===
 
-    # 2) Prealertas (lead=30', window=330s por defecto; override con env vars)
-    lead = int(os.getenv("LEAD_MINUTES", "30"))
-    window = int(os.getenv("WINDOW_SECONDS", "330"))
-    run_prealerts(lead_minutes=lead, window_seconds=window)
+# 1) Digest "no hay noticias" (una vez al día a la hora exacta BA)
+digest_hhmm = os.getenv("DIGEST_AT_BA", "03:00")  # podés setear "07:00" si preferís más tarde
+send_no_news_digest_if_applicable(digest_at_hhmm_ba=digest_hhmm)
+
+# 2) Prealertas (lead=30', window=330s por defecto; override con env vars)
+lead = int(os.getenv("LEAD_MINUTES", "30"))
+window = int(os.getenv("WINDOW_SECONDS", "330"))
+run_prealerts(lead_minutes=lead, window_seconds=window)
