@@ -164,29 +164,42 @@ def load_events_today_ba_eur_usd_high():
     return out
 
 # ---------- Lógica principal: PREALERTAS ----------
-def run_prealerts(lead_minutes=30, window_seconds=330) -> None:
+def run_prealerts(lead_minutes=30, window_seconds=150) -> None:
     """
-    Ejecutar con cron (p. ej., cada 5 minutos).
-    Dispara si 'ahora' ∈ [evento-30', evento-30' + window].
-    Con cron de 5', usar window ≈ 330 s para cubrir jitter y evitar duplicados.
+    Corre con cron cada 5'. Dispara SOLO el primer tick (ventana chica)
+    y agrupa múltiples eventos que comparten el mismo horario BA.
     """
     now_utc = datetime.now(timezone.utc)
-    events = load_events_today_ba_eur_usd_high()
 
+    # 1) calculamos qué eventos disparan en esta corrida
+    events = load_events_today_ba_eur_usd_high()
+    due = []  # [(dt_evt_ba_str, currency, title), ...]
     for ev in events:
         dt_evt_utc = datetime.fromtimestamp(ev["timestamp_utc"], tz=timezone.utc)
         prealert_utc = dt_evt_utc - timedelta(minutes=lead_minutes)
+        if prealert_utc <= now_utc < prealert_utc + timedelta(seconds=window_seconds):
+            due.append((
+                ev["dt_ba"].strftime("%H:%M"),   # hora BA (para mostrar/agrupado)
+                ev["currency"],
+                ev["title"],
+            ))
 
-        # Ventana de disparo (stateless)
-        if not (prealert_utc <= now_utc < prealert_utc + timedelta(seconds=window_seconds)):
-            continue
+    if not due:
+        return
 
-        # Armado del mensaje con tu formato
-        title = html.escape(ev["title"])
-        cur_s = html.escape(ev["currency"])            # moneda escapada para HTML
-        hora_ba = ev["dt_ba"].strftime("%H:%M")        # HH:MM en BA
-        emoji = CURRENCY_EMOJI.get(ev["currency"], "")
-        fecha_es = encabezado_hoy_ba()
+    # 2) agrupar por (hora_ba, currency)
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for hora_ba, cur, title in due:
+        groups[(hora_ba, cur)].append(title)
+
+    # 3) enviar un mensaje por grupo
+    fecha_es = encabezado_hoy_ba()
+    for (hora_ba, cur), titles in sorted(groups.items()):
+        cur_s = html.escape(cur)
+        emoji = CURRENCY_EMOJI.get(cur, "")
+        # lista de títulos
+        body_titles = "\n".join([f"• 🗂️ <b>{html.escape(t)}</b>" for t in titles])
 
         msg = (
             f"📰 <b>Noticias de alto impacto para {cur_s} de hoy 👇🏻</b>\n\n"
@@ -194,7 +207,7 @@ def run_prealerts(lead_minutes=30, window_seconds=330) -> None:
             f"⏳ <b>En {lead_minutes} minutos:</b>\n"
             f"• ⏰ <b>{hora_ba} h</b>\n"
             f"• {emoji} <code>{cur_s}</code>\n"
-            f"• 🗂️ <b>{title}</b>\n\n"
+            f"{body_titles}\n\n"
             f"📍 Hora Buenos Aires\n"
             f'🔗 <a href="https://www.forexfactory.com/calendar">Ver más detalles en ForexFactory</a>\n\n'
             f"⚡️ <b>¡Operá con precaución!</b>"
@@ -257,5 +270,5 @@ send_no_news_digest_if_applicable(digest_at_hhmm_ba=digest_hhmm)
 
 # 2) Prealertas (lead=30', window=330s por defecto; override con env vars)
 lead = int(os.getenv("LEAD_MINUTES", "30"))
-window = int(os.getenv("WINDOW_SECONDS", "330"))
+window = int(os.getenv("WINDOW_SECONDS", "150"))
 run_prealerts(lead_minutes=lead, window_seconds=window)
