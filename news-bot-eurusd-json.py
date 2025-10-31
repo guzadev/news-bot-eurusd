@@ -11,10 +11,19 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
+import time, random
+import tempfile
+
 
 # ---------- Config base ----------
 FEED_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
 TZ_BA = ZoneInfo("America/Argentina/Buenos_Aires")
+
+# usa el directorio temporal del SO (C:\Users\...\AppData\Local\Temp en Windows, /tmp en Linux)
+CACHE_DIR = Path(tempfile.gettempdir()) / "ff_prealerts_cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+FEED_CACHE_PATH = CACHE_DIR / "ff_calendar_thisweek.json"
+FEED_CACHE_TTL_SEC = 15 * 60  # 15 min
 
 # Diccionarios para fecha en español (encabezado)
 DIAS_ES = {
@@ -68,12 +77,61 @@ def send_telegram_html(message: str) -> None:
         except Exception as e:
             print(f"[WARN] Telegram a {chat_id}: {e}", flush=True)
 
+
+# --- HELPERS DE CACHE (PEGAR ANTES DE fetch_week) ---
+def _save_cache(data: dict) -> None:
+    """Guarda el feed en cache local con timestamp."""
+    try:
+        FEED_CACHE_PATH.write_text(json.dumps({
+            "ts": int(time.time()),
+            "data": data
+        }), encoding="utf-8")
+    except Exception as e:
+        print(f"[WARN] No se pudo guardar cache: {e}", flush=True)
+
+def _load_cache_if_fresh():
+    """Devuelve el feed del cache si no está vencido; si no, None."""
+    try:
+        if not FEED_CACHE_PATH.exists():
+            return None
+        blob = json.loads(FEED_CACHE_PATH.read_text(encoding="utf-8"))
+        ts = blob.get("ts", 0)
+        if time.time() - ts <= FEED_CACHE_TTL_SEC:
+            return blob.get("data")
+    except Exception as e:
+        print(f"[WARN] Cache inválido: {e}", flush=True)
+    return None
+
 # ---------- Lectura del feed ----------
-def fetch_week():
-    """Descarga y devuelve el JSON semanal."""
-    r = requests.get(FEED_URL, timeout=20)
-    r.raise_for_status()
-    return r.json()
+def fetch_week(max_retries: int = 4):
+    cached = _load_cache_if_fresh()
+    if cached is not None:
+        return cached  # evita pegarle a la API si el cache sirve
+
+    headers = {"User-Agent": "eurusd-prealerts/1.0 (+bot)", "Accept": "application/json"}
+    for attempt in range(max_retries):
+        try:
+            r = requests.get(FEED_URL, headers=headers, timeout=20)
+            if r.status_code == 429:
+                sleep_s = (2 ** attempt) + random.uniform(0, 0.5)
+                print(f"[WARN] 429 Too Many Requests. Reintentando en {sleep_s:.2f}s...", flush=True)
+                time.sleep(sleep_s)
+                continue
+            r.raise_for_status()
+            data = r.json()
+            _save_cache(data)
+            return data
+        except requests.RequestException:
+            sleep_s = (2 ** attempt) + random.uniform(0, 0.5)
+            print(f"[WARN] Error al pedir feed: retry en {sleep_s:.2f}s", flush=True)
+            time.sleep(sleep_s)
+
+    cached = _load_cache_if_fresh()
+    if cached is not None:
+        print("[INFO] Usando cache local /tmp por rate limit o fallo de red.", flush=True)
+        return cached
+    raise RuntimeError("No se pudo obtener el feed (rate limit/red) y no hay cache fresco.")
+
 
 # ---------- Helpers de normalización ----------
 def is_high_impact(evt) -> bool:
@@ -169,6 +227,7 @@ def run_prealerts(lead_minutes=30, window_seconds=150) -> None:
     Corre con cron cada 5'. Dispara SOLO el primer tick (ventana chica)
     y agrupa múltiples eventos que comparten el mismo horario BA.
     """
+
     now_utc = datetime.now(timezone.utc)
 
     # 1) calculamos qué eventos disparan en esta corrida
@@ -268,7 +327,7 @@ def dentro_de_franja_ba() -> bool:
 digest_hhmm = os.getenv("DIGEST_AT_BA", "03:00")  # podés setear "07:00" si preferís más tarde
 send_no_news_digest_if_applicable(digest_at_hhmm_ba=digest_hhmm)
 
-# 2) Prealertas (lead=30', window=330s por defecto; override con env vars)
+# 2) Prealertas (lead=30', window=150s por defecto; override con env vars)
 lead = int(os.getenv("LEAD_MINUTES", "30"))
 window = int(os.getenv("WINDOW_SECONDS", "150"))
 run_prealerts(lead_minutes=lead, window_seconds=window)
