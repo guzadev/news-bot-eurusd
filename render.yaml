@@ -1,36 +1,10 @@
 services:
-  # --- EUR prealertas (UTC 06:00–10:00) ---
   - type: cron
-    name: ff-prealert-eur
+    name: ff-prealerts-all
     env: python
-    schedule: "*/5 6-10 * * 1-5"          # cada 5' en 06:00–10:59 UTC (lun–vie)
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "python -u news-bot-eurusd-json.py"
-    envVars:
-      - key: TELEGRAM_TOKEN
-        sync: false
-      - key: TELEGRAM_CHAT_IDS
-        sync: false
-
-  # --- USD prealertas (UTC 11:30–15:30) ---
-  - type: cron
-    name: ff-prealert-usd
-    env: python
-    # usamos una franja amplia 11–15; el script solo envía cuando corresponde
-    schedule: "*/5 11-15 * * 1-5"
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "python -u news-bot-eurusd-json.py"
-    envVars:
-      - key: TELEGRAM_TOKEN
-        sync: false
-      - key: TELEGRAM_CHAT_IDS
-        sync: false
-
-  # --- Fed opcional (UTC 17:30–18:30) ---
-  - type: cron
-    name: ff-prealert-fed
-    env: python
-    schedule: "*/5 17-18 * * 1-5"
+    # EUR 06:30–10:30 UTC, USD 12:00–16:00 UTC, Fed 18:00–19:00 UTC
+    # además 06:00 UTC incluye el digest 03:00 BA
+    schedule: "*/5 6-10,12-16,18-19 * * 1-5"
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python -u news-bot-eurusd-json.py"
     envVars:
