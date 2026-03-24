@@ -36,7 +36,7 @@ MESES_ES = {
 }
 
 # Emoji por moneda (lo que pediste: 💵 USD / 💶 EUR)
-CURRENCY_EMOJI = {"USD":"💵", "EUR":"💶"}
+CURRENCY_EMOJI = {"USD":"💵", "EUR":"💶", "GBP":"💷"}
 
 def encabezado_hoy_ba() -> str:
     """Devuelve 'Viernes 27 de Junio' según la fecha actual en BA."""
@@ -135,14 +135,18 @@ def fetch_week(max_retries: int = 4):
 
 # ---------- Helpers de normalización ----------
 def is_high_impact(evt) -> bool:
-    """Detecta 'alto impacto' (acepta string 'High' o escala numérica >=3)."""
+    """Detecta 'alto impacto' o 'holiday' (acepta string 'High'/'Holiday' o escala numérica >=3)."""
     imp = evt.get("impact")
     if isinstance(imp, str):
-        return "high" in imp.lower()
+        imp_l = imp.lower()
+        return "high" in imp_l or "holiday" in imp_l
     if isinstance(imp, (int, float)):
         return imp >= 3
     imp2 = evt.get("impactDescription") or evt.get("impact_label")
-    return isinstance(imp2, str) and "high" in imp2.lower()
+    if isinstance(imp2, str):
+        imp2_l = imp2.lower()
+        return "high" in imp2_l or "holiday" in imp2_l
+    return False
 
 def get_currency(evt) -> str:
     """Obtiene la moneda (USD/EUR). Se normaliza a MAYÚSCULAS."""
@@ -201,7 +205,7 @@ def load_events_today_ba_eur_usd_high():
             if not is_high_impact(evt):
                 continue
             cur = get_currency(evt)
-            if cur not in {"USD", "EUR"}:
+            if cur not in {"USD", "EUR", "GBP"}:
                 continue
             ts = get_ts_utc(evt)
             if not ts:
@@ -299,7 +303,7 @@ def send_no_news_digest_if_applicable(digest_at_hhmm_ba: str = "03:00") -> None:
     fecha_es = encabezado_hoy_ba()
     msg = (
         f"📅 <b>{html.escape(fecha_es)}:</b>\n\n"
-        f"✅ <b>Hoy no hay noticias de alto impacto para las monedas EUR y USD</b> 👍🏻\n\n"
+        f"✅ <b>Hoy no hay noticias de alto impacto para las monedas EUR, USD y GBP</b> 👍🏻\n\n"
         f"📈 Operá con tranquilidad 👌🏻"
     )
     send_telegram_html(msg)
